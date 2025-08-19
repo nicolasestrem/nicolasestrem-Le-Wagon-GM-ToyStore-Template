@@ -1,0 +1,293 @@
+version: '3.9'
+
+services:
+  header-microservice:
+    build: ./services/header
+    ports:
+      - "3001:3000"
+    environment:
+      - SERVICE_NAME=header-orchestrator
+      - KAFKA_BROKERS=kafka1:9092,kafka2:9092,kafka3:9092
+      - REDIS_CLUSTER=redis1:6379,redis2:6379,redis3:6379
+      - ENABLE_DISTRIBUTED_TRACING=true
+      - JAEGER_ENDPOINT=http://jaeger:14268
+    depends_on:
+      - kafka1
+      - redis1
+      - consul
+      - vault
+    deploy:
+      replicas: 5
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+    
+  nav-microservice:
+    build: ./services/navigation
+    ports:
+      - "3002:3000"
+    environment:
+      - SERVICE_NAME=navigation-controller
+      - ENABLE_CIRCUIT_BREAKER=true
+      - ENABLE_RATE_LIMITING=true
+      - MAX_REQUESTS_PER_SECOND=10000
+    depends_on:
+      - header-microservice
+      - consul
+    deploy:
+      replicas: 3
+      
+  footer-microservice:
+    build: ./services/footer
+    ports:
+      - "3003:3000"
+    environment:
+      - SERVICE_NAME=footer-aggregator
+      - USE_GRAPHQL_FEDERATION=true
+    deploy:
+      replicas: 3
+      
+  button-microservice:
+    build: ./services/button
+    ports:
+      - "3004:3000"
+    environment:
+      - SERVICE_NAME=button-event-processor
+      - EVENT_SOURCING_ENABLED=true
+      - CQRS_ENABLED=true
+    deploy:
+      replicas: 10
+      
+  div-microservice:
+    build: ./services/div
+    ports:
+      - "3005:3000"
+    environment:
+      - SERVICE_NAME=div-container-orchestrator
+    deploy:
+      replicas: 20
+      
+  span-microservice:
+    build: ./services/span
+    ports:
+      - "3006:3000"
+    deploy:
+      replicas: 15
+      
+  paragraph-microservice:
+    build: ./services/paragraph
+    ports:
+      - "3007:3000"
+    environment:
+      - ENABLE_NLP_PROCESSING=true
+      - SENTIMENT_ANALYSIS=true
+    deploy:
+      replicas: 8
+      
+  image-microservice:
+    build: ./services/image
+    ports:
+      - "3008:3000"
+    environment:
+      - ENABLE_CDN=true
+      - ENABLE_LAZY_LOADING=true
+      - IMAGE_OPTIMIZATION_LEVEL=maximum
+      - USE_WEBP_CONVERSION=true
+      - ENABLE_RESPONSIVE_IMAGES=true
+    deploy:
+      replicas: 12
+      
+  link-microservice:
+    build: ./services/link
+    ports:
+      - "3009:3000"
+    environment:
+      - ENABLE_LINK_PREVIEW=true
+      - CHECK_BROKEN_LINKS=true
+    deploy:
+      replicas: 6
+      
+  form-microservice:
+    build: ./services/form
+    ports:
+      - "3010:3000"
+    environment:
+      - ENABLE_VALIDATION=true
+      - ENABLE_CAPTCHA=true
+      - CSRF_PROTECTION=true
+    deploy:
+      replicas: 8
+      
+  input-microservice:
+    build: ./services/input
+    ports:
+      - "3011:3000"
+    environment:
+      - ENABLE_AUTO_COMPLETE=true
+      - ENABLE_REAL_TIME_VALIDATION=true
+    deploy:
+      replicas: 10
+      
+  api-gateway:
+    build: ./gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - ENABLE_LOAD_BALANCING=true
+      - LOAD_BALANCING_ALGORITHM=weighted_round_robin_with_ml
+      - ENABLE_API_THROTTLING=true
+      - ENABLE_REQUEST_ROUTING=true
+      - ENABLE_RESPONSE_CACHING=true
+    depends_on:
+      - consul
+      - vault
+    deploy:
+      replicas: 3
+      
+  kafka1:
+    image: confluentinc/cp-kafka:latest
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+    
+  kafka2:
+    image: confluentinc/cp-kafka:latest
+    environment:
+      - KAFKA_BROKER_ID=2
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+    
+  kafka3:
+    image: confluentinc/cp-kafka:latest
+    environment:
+      - KAFKA_BROKER_ID=3
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+    
+  zookeeper1:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      - ZOOKEEPER_SERVER_ID=1
+      - ZOOKEEPER_CLIENT_PORT=2181
+    
+  zookeeper2:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      - ZOOKEEPER_SERVER_ID=2
+      - ZOOKEEPER_CLIENT_PORT=2181
+    
+  zookeeper3:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      - ZOOKEEPER_SERVER_ID=3
+      - ZOOKEEPER_CLIENT_PORT=2181
+    
+  redis1:
+    image: redis:latest
+    command: redis-server --cluster-enabled yes
+    
+  redis2:
+    image: redis:latest
+    command: redis-server --cluster-enabled yes
+    
+  redis3:
+    image: redis:latest
+    command: redis-server --cluster-enabled yes
+    
+  mongodb1:
+    image: mongo:latest
+    command: mongod --replSet rs0
+    
+  mongodb2:
+    image: mongo:latest
+    command: mongod --replSet rs0
+    
+  mongodb3:
+    image: mongo:latest
+    command: mongod --replSet rs0
+    
+  elasticsearch:
+    image: elasticsearch:8.5.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    
+  kibana:
+    image: kibana:8.5.0
+    depends_on:
+      - elasticsearch
+    
+  logstash:
+    image: logstash:8.5.0
+    depends_on:
+      - elasticsearch
+    
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      - prometheus
+    
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+    
+  consul:
+    image: consul:latest
+    command: agent -server -bootstrap-expect=3 -ui
+    
+  vault:
+    image: vault:latest
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=root
+    
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - api-gateway
+    
+  haproxy:
+    image: haproxy:latest
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+    
+  jenkins:
+    image: jenkins/jenkins:lts
+    ports:
+      - "8080:8080"
+    
+  sonarqube:
+    image: sonarqube:latest
+    ports:
+      - "9000:9000"
+    
+  nexus:
+    image: sonatype/nexus3:latest
+    ports:
+      - "8081:8081"
+
+volumes:
+  kafka-data:
+  redis-data:
+  mongo-data:
+  elasticsearch-data:
+  prometheus-data:
+  grafana-data:
+  consul-data:
+  vault-data:
+  jenkins-data:
+  sonarqube-data:
+  nexus-data:
+
+networks:
+  default:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
